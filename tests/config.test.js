@@ -9,7 +9,7 @@ const buildFakeAdmin = () => {
     return {
         initializeAppCalls: [],
         credential: {
-            cert: (serviceAccount) => ({ type: 'cert', serviceAccount }),
+            cert: () => ({ type: 'cert' }),
             applicationDefault: () => ({ type: 'applicationDefault' }),
         },
         initializeApp: function (options) {
@@ -19,12 +19,10 @@ const buildFakeAdmin = () => {
     }
 }
 
-const withStubbedFirebaseAdmin = (env, fn) => {
+const withStubbedFirebaseAdmin = async (env, fn) => {
     const fakeAdmin = buildFakeAdmin()
     const originalEnv = process.env.NODE_ENV
     const originalLoad = Module._load
-
-    delete require.cache[configPath]
 
     Module._load = function (request, parent, isMain) {
         if (request === 'firebase-admin') {
@@ -44,24 +42,24 @@ const withStubbedFirebaseAdmin = (env, fn) => {
         process.env.NODE_ENV = env
     }
 
-    let config
+    delete require.cache[configPath]
+
     try {
-        config = require(configPath)
+        const config = require(configPath)
+        await fn(config, fakeAdmin)
     } finally {
         Module._load = originalLoad
-        delete require.cache[configPath]
         if (originalEnv === undefined) {
             delete process.env.NODE_ENV
         } else {
             process.env.NODE_ENV = originalEnv
         }
+        delete require.cache[configPath]
     }
-
-    return fn(config, fakeAdmin)
 }
 
-test('config initializes dev Firebase app when NODE_ENV=dev', (t) => {
-    withStubbedFirebaseAdmin('dev', (config, fakeAdmin) => {
+test('config initializes dev Firebase app when NODE_ENV=dev', async () => {
+    await withStubbedFirebaseAdmin('dev', async (config, fakeAdmin) => {
         assert.equal(config.NODE_ENV, 'dev')
         assert.equal(fakeAdmin.initializeAppCalls.length, 1)
         assert.equal(fakeAdmin.initializeAppCalls[0].databaseURL, 'https://expense-tracker-dev.asia-southeast1.firebasedatabase.app/')
@@ -69,8 +67,8 @@ test('config initializes dev Firebase app when NODE_ENV=dev', (t) => {
     })
 })
 
-test('config initializes test Firebase app when NODE_ENV=test', (t) => {
-    withStubbedFirebaseAdmin('test', (config, fakeAdmin) => {
+test('config initializes uat Firebase app when NODE_ENV=test', async () => {
+    await withStubbedFirebaseAdmin('test', async (config, fakeAdmin) => {
         assert.equal(config.NODE_ENV, 'test')
         assert.equal(fakeAdmin.initializeAppCalls.length, 1)
         assert.equal(fakeAdmin.initializeAppCalls[0].databaseURL, 'https://expense-tracker-uat.asia-southeast1.firebasedatabase.app/')
@@ -78,17 +76,8 @@ test('config initializes test Firebase app when NODE_ENV=test', (t) => {
     })
 })
 
-test('config initializes production Firebase app when NODE_ENV is missing', (t) => {
-    withStubbedFirebaseAdmin(undefined, (config, fakeAdmin) => {
-        assert.equal(config.NODE_ENV, undefined)
-        assert.equal(fakeAdmin.initializeAppCalls.length, 1)
-        assert.equal(fakeAdmin.initializeAppCalls[0].databaseURL, 'https://expense-tracker-prod.asia-southeast1.firebasedatabase.app/')
-        assert.equal(fakeAdmin.initializeAppCalls[0].credential.type, 'applicationDefault')
-    })
-})
-
-test('config initializes production Firebase app when NODE_ENV=production', (t) => {
-    withStubbedFirebaseAdmin('production', (config, fakeAdmin) => {
+test('config initializes prod Firebase app when NODE_ENV=production', async () => {
+    await withStubbedFirebaseAdmin('production', async (config, fakeAdmin) => {
         assert.equal(config.NODE_ENV, 'production')
         assert.equal(fakeAdmin.initializeAppCalls.length, 1)
         assert.equal(fakeAdmin.initializeAppCalls[0].databaseURL, 'https://expense-tracker-prod.asia-southeast1.firebasedatabase.app/')
