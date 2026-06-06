@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 # Secrets and Keys
 service-account.json
 .env
+
+# Tests
+*.rest

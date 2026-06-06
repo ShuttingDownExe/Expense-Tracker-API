@@ -1,5 +1,6 @@
 const expenseRouter = require('express').Router()
-const { admin } = require('../utils/config')
+const { admin, NODE_ENV } = require('../utils/config')
+const { expenseSchema } = require('../utils/validation')
 
 const db = admin.database()
 const expensesRef = db.ref('expenses')
@@ -34,7 +35,16 @@ expenseRouter.get('/:id', async (req, res) => {
 
 expenseRouter.post('/', async (req, res) => {
     try {
-        const newExpense = req.body
+        const result = expenseSchema.safeParse(req.body)
+        if (!result.success) {
+            const errors = result.error.issues.map((err) => ({
+                field: err.path.join('.'),
+                message: err.message,
+            }))
+            return res.status(400).json({ error: 'Validation failed', errors })
+        }
+
+        const newExpense = result.data
         const newExpenseRef = await expensesRef.push(newExpense)
         res.status(201).json({ id: newExpenseRef.key, ...newExpense })
     } catch (error) {
