@@ -1,14 +1,21 @@
 const expenseRouter = require('express').Router()
 const { admin, NODE_ENV } = require('../utils/config')
-const { expenseSchema } = require('../utils/validation')
+const { 
+    validateRequest, 
+    createExpenseSchema, 
+    expenseIdSchema 
+} = require('../utils/validation')
+
+const { requireAuth } = require('../middleware/auth')
 
 const db = admin.database()
-const expensesRef = db.ref('expenses')
 
-expenseRouter.get('/', async (req, res) => {
+expenseRouter.get('/', requireAuth, async (req, res) => {
+    const uid = req.user.uid
     console.log('Fetching expenses from Firebase Realtime Database...')
     try {
-        const snapshot = await expensesRef.once('value')
+        const userExpensesRef = db.ref(`users/${uid}/expenses`)
+        const snapshot = await userExpensesRef.once('value')
         const expenses = snapshot.val() || {}
         res.json(expenses)
     } catch (error) {
@@ -17,10 +24,12 @@ expenseRouter.get('/', async (req, res) => {
     }
 })
 
-expenseRouter.get('/:id', async (req, res) => {
+expenseRouter.get('/:id', requireAuth, validateRequest(expenseIdSchema), async (req, res) => {
+    const uid = req.user.uid
     const expenseId = req.params.id
     try {
-        const snapshot = await expensesRef.child(expenseId).once('value')
+        const userExpensesRef = db.ref(`users/${uid}/expenses`)
+        const snapshot = await userExpensesRef.child(expenseId).once('value')
         const expense = snapshot.val()
         if (expense) {
             res.json({ id: expenseId, ...expense })
@@ -33,19 +42,18 @@ expenseRouter.get('/:id', async (req, res) => {
     }
 })
 
-expenseRouter.post('/', async (req, res) => {
+expenseRouter.post('/', requireAuth, validateRequest(createExpenseSchema), async (req, res) => {
     try {
-        const result = expenseSchema.safeParse(req.body)
-        if (!result.success) {
-            const errors = result.error.issues.map((err) => ({
-                field: err.path.join('.'),
-                message: err.message,
-            }))
-            return res.status(400).json({ error: 'Validation failed', errors })
-        }
-
-        const newExpense = result.data
-        const newExpenseRef = await expensesRef.push(newExpense)
+        const newExpense = req.body
+        const uid = req.user.uid
+        const userExpensesRef = db.ref(`users/${uid}/expenses`)
+        
+        // Inject the server timestamp during the push
+        const newExpenseRef = await userExpensesRef.push({
+            ...newExpense,
+            createdAt: admin.database.ServerValue.TIMESTAMP
+        })
+        
         res.status(201).json({ id: newExpenseRef.key, ...newExpense })
     } catch (error) {
         console.error('Error adding expense:', error)
@@ -54,10 +62,12 @@ expenseRouter.post('/', async (req, res) => {
 })
 
 
-expenseRouter.delete('/:id', async (req, res) => {
+expenseRouter.delete('/:id', requireAuth, validateRequest(expenseIdSchema), async (req, res) => {
     const expenseId = req.params.id
+    const uid = req.user.uid
+    const userExpensesRef = db.ref(`users/${uid}/expenses`)
     try {
-        await expensesRef.child(expenseId).remove()
+        await userExpensesRef.child(expenseId).remove()
         res.status(204).end()
     } catch (error) {
         console.error('Error deleting expense:', error)
