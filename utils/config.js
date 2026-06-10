@@ -14,9 +14,8 @@ const initDev = () => {
 }
 
 const initTest = () => {
-    const serviceAccount = require('../service-account.json')
     admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
+        credential: admin.credential.applicationDefault(),
         databaseURL: 'https://expense-tracker-uat.asia-southeast1.firebasedatabase.app/'
     })
 }
