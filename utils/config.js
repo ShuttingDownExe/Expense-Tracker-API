@@ -16,7 +16,7 @@ const initDev = () => {
 const initTest = () => {
     admin.initializeApp({
         credential: admin.credential.applicationDefault(),
-        databaseURL: 'https://expense-tracker-prod.asia-southeast1.firebasedatabase.app/'
+        databaseURL: 'https://expense-tracker-uat.asia-southeast1.firebasedatabase.app/'
     })
 }
 
