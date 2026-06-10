@@ -2,11 +2,11 @@ require('dotenv').config()
 const admin = require('firebase-admin')
 
 const { PORT } = process.env
-const {NODE_ENV} = process.env
+const { NODE_ENV } = process.env
 
 const initDev = () => {
-    
     const serviceAccount = require('../service-account.json')
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
     admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
         databaseURL: 'https://expense-tracker-dev.asia-southeast1.firebasedatabase.app/'
@@ -14,11 +14,9 @@ const initDev = () => {
 }
 
 const initTest = () => {
-    
-    const serviceAccount = require('../service-account.json')
     admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        databaseURL: 'https://expense-tracker-uat.asia-southeast1.firebasedatabase.app/'
+        credential: admin.credential.applicationDefault(),
+        databaseURL: 'https://expense-tracker-prod.asia-southeast1.firebasedatabase.app/'
     })
 }
 
