@@ -1,7 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
-const rateLimit = require('express-rate-limit')
+const { default: rateLimit, ipKeyGenerator } = require('express-rate-limit')
 const morgan = require('morgan')
 
 const expenseRouter = require('./controller/expenses')
@@ -9,12 +9,14 @@ const authValidateRouter = require('./controller/authValidate')
 const { PORT, NODE_ENV } = require('./utils/config')
 
 const app = express()
+app.set('trust proxy',1)
 const limiter = rateLimit({
 	windowMs: 15 * 60 * 1000, // 15 minutes
 	max: 100, // limit each IP to 100 requests per windowMs
 	message: { error: 'Too many requests, please try again later.' },
 	standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
 	legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+	keyGenerator: (req, res) => ipKeyGenerator(req)
 })
 
 app.use(cors())
