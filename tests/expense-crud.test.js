@@ -66,7 +66,6 @@ describe('Expense CRUD Functionality (Mocked)', () => {
             description: 'Lunch',
             amount: 15.50,
             vendor: 'Burger King',
-            date: '2026-06-06'
         };
 
         const response = await request(app)
