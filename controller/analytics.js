@@ -1,4 +1,4 @@
-analyticsRouter = require('express').Router()
+const analyticsRouter = require('express').Router()
 const {admin} = require('../utils/config')
 
 const {requireAuth} = require('../middleware/auth')
