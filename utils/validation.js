@@ -32,12 +32,11 @@ const validateRequest = (schema) => {
 
 const createExpenseSchema = z.object({
     body: z.object({
-        description: z.string().min(1, 'Description is required'),
+        description: z.string().min(1, 'Description is required').max(100, 'Description must be less than 100 characters'),
         amount: z.number().positive('Amount must be a positive number'),
         vendor: z.string()
             .min(1, 'Vendor is required')
             .max(100, 'Vendor name must be less than 100 characters'),
-        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
     }).strict(),
 });
 
