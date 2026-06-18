@@ -6,7 +6,7 @@ const {requireAuth} = require('../middleware/auth')
 const db = admin.database()
 
 analyticsRouter.get('/today', requireAuth, async (req, res) => {
-
+    
 })
 
 analyticsRouter.get('/weekly', requireAuth, async (req, res) => {
