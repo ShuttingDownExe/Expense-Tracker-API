@@ -1,5 +1,5 @@
 const expenseRouter = require('express').Router()
-const { admin, NODE_ENV } = require('../utils/config')
+const { admin} = require('../utils/config')
 const { 
     validateRequest, 
     createExpenseSchema, 
@@ -44,10 +44,15 @@ expenseRouter.get('/:id', requireAuth, validateRequest(expenseIdSchema), async (
 
 expenseRouter.post('/', requireAuth, validateRequest(createExpenseSchema), async (req, res) => {
     try {
-        const newExpense = req.body
         const uid = req.user.uid
         const userExpensesRef = db.ref(`users/${uid}/expenses`)
-        
+        const today = new Date().toLocaleDateString('en-CA', {timeZone: 'Asia/Kolkata'})
+        const newExpense = {
+            date: today,
+            ...req.body
+        }
+
+
         // Inject the server timestamp during the push
         const newExpenseRef = await userExpensesRef.push({
             ...newExpense,
