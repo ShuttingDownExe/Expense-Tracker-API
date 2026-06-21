@@ -6,6 +6,7 @@ const morgan = require('morgan')
 
 const expenseRouter = require('./controller/expenses')
 const authValidateRouter = require('./controller/authValidate')
+const analyticsRouter = require('./controller/analytics')
 const { PORT, NODE_ENV } = require('./utils/config')
 
 const app = express()
@@ -32,6 +33,7 @@ if (NODE_ENV === 'dev') {
 
 app.use('/api/expenses', expenseRouter)
 app.use('/api/auth', authValidateRouter)
+app.use('/api/analytics', analyticsRouter)
 
 app.use((error, req, res, next) => {
 	if (error instanceof SyntaxError && error.status === 400 && 'body' in error) {
