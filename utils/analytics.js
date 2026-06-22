@@ -36,6 +36,26 @@ const buildCurrentWeekBlueprint = (timezone) => {
     return {blueprint, dateMap, startDate}
 }
 
+const buildCurrentMonthBlueprint = (timezone) => {
+    const todayStr = getLocalDateString(timezone, 0)
+    const currentDate = new Date(todayStr)
+    const currentDayOfTheMonth = currentDate.getDate().toString().padStart(2, '0')
+    const currentDayOfTheMonthInt = parseInt(currentDayOfTheMonth, 10)
+
+    const blueprint = {}
+    const dateMap = {}
+
+    for (let i = 1; i <= currentDayOfTheMonthInt; i++) {
+        const offset = currentDayOfTheMonthInt - i
+        const dateStr = getLocalDateString(timezone, offset)
+        dateMap[dateStr] = i
+        blueprint[i] = 0
+    }
+
+    const startDate = getLocalDateString(timezone, currentDayOfTheMonthInt - 1)
+    return {blueprint, dateMap, startDate}
+}
+
 const aggregateExpensesByMap = (expenses, blueprint, dateMap) => {
     const result = {...blueprint}
     Object.values(expenses || {}).forEach(expense => {
@@ -50,4 +70,4 @@ const aggregateExpensesByMap = (expenses, blueprint, dateMap) => {
     return result
 }
 
-module.exports = { getLocalDateString, sumExpenses, buildCurrentWeekBlueprint, aggregateExpensesByMap }
+module.exports = { getLocalDateString, sumExpenses, buildCurrentWeekBlueprint, buildCurrentMonthBlueprint, aggregateExpensesByMap }
