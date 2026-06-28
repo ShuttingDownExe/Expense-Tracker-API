@@ -10,6 +10,7 @@ const {
     getLocalDateString,
     sumExpenses,
     buildCurrentWeekBlueprint,
+    buildCurrentMonthBlueprint,
     aggregateExpensesByMap,
 } = require('../utils/analytics');
 
@@ -386,6 +387,149 @@ describe('Analytics — GET /weekly (endpoint, mocked DB)', () => {
     });
 });
 
-describe('Analytics — pending endpoints', () => {
-    test('GET /monthly', { skip: 'Not yet implemented in controller/analytics.js' }, () => {});
+describe('buildCurrentMonthBlueprint (unit)', () => {
+    const sortedDates = (dateMap) =>
+        Object.keys(dateMap).sort((a, b) => a.localeCompare(b));
+
+    // Day-of-month "today" is in, computed independently of the helper.
+    const dayOfMonth = (tz) =>
+        new Date(`${getLocalDateString(tz, 0)}T00:00:00Z`).getUTCDate();
+
+    test('TC-29: one zeroed bucket per day from the 1st through today', () => {
+        const tz = 'Asia/Kolkata';
+        const { blueprint, dateMap } = buildCurrentMonthBlueprint(tz);
+        const dayCount = dayOfMonth(tz);
+
+        assert.strictEqual(Object.keys(dateMap).length, dayCount);
+        assert.strictEqual(Object.keys(blueprint).length, dayCount);
+        // Indices are 1..dayCount (1-based, unlike weekly's 0-based) and zeroed.
+        for (let i = 1; i <= dayCount; i++) {
+            assert.strictEqual(blueprint[i], 0);
+        }
+    });
+
+    test('TC-30: dateMap maps consecutive days to 1-based indices ending today', () => {
+        const tz = 'Asia/Kolkata';
+        const { dateMap } = buildCurrentMonthBlueprint(tz);
+        const dates = sortedDates(dateMap);
+
+        // Earliest date → index 1, latest → highest index.
+        dates.forEach((date, i) => assert.strictEqual(dateMap[date], i + 1));
+
+        // Latest date is today in that timezone.
+        assert.strictEqual(dates[dates.length - 1], getLocalDateString(tz, 0));
+
+        // Each date is exactly one day after the previous.
+        for (let i = 1; i < dates.length; i++) {
+            const prev = new Date(`${dates[i - 1]}T00:00:00Z`);
+            const curr = new Date(`${dates[i]}T00:00:00Z`);
+            assert.strictEqual(curr - prev, 24 * 60 * 60 * 1000);
+        }
+    });
+
+    test('TC-31: startDate is the first of the month (index 1) and within the month', () => {
+        const tz = 'Asia/Kolkata';
+        const { startDate, dateMap } = buildCurrentMonthBlueprint(tz);
+        const dates = sortedDates(dateMap);
+
+        assert.strictEqual(startDate, dates[0]);
+        assert.strictEqual(dateMap[startDate], 1);
+        // The first covered day is calendar day 01.
+        assert.match(startDate, /^\d{4}-\d{2}-01$/);
+    });
+
+    test('TC-32: falls back gracefully for an invalid timezone (no throw)', () => {
+        // Regression test: the old toLocaleString approach threw a RangeError
+        // for bad zones; it now routes through the UTC-guarded helper.
+        assert.doesNotThrow(() => buildCurrentMonthBlueprint('Not/AZone'));
+    });
+});
+
+describe('Analytics — GET /monthly (endpoint, mocked DB)', () => {
+    // Mirrors the /monthly route; only the DB is mocked, the date/aggregation
+    // logic is the real code.
+    const setupTestApp = (mockOnceResult, { dbError = false, spy = {} } = {},
+        mockAuthUser = { uid: 'user-123' }) => {
+        const app = express();
+        app.use(express.json());
+
+        const requireAuth = createAuthMiddleware({ verifyIdToken: async () => mockAuthUser });
+
+        const mockDb = {
+            ref: (path) => {
+                spy.path = path;
+                const chain = {
+                    orderByChild: (f) => { spy.orderByChild = f; return chain; },
+                    startAt: (v) => { spy.startAt = v; return chain; },
+                    endAt: (v) => { spy.endAt = v; return chain; },
+                    once: async () => {
+                        if (dbError) throw new Error('Firebase connection lost');
+                        return { val: () => mockOnceResult };
+                    },
+                };
+                return chain;
+            },
+        };
+
+        const router = express.Router();
+        router.get('/monthly', requireAuth, async (req, res) => {
+            const uid = req.user.uid;
+            const timeZone = req.query.tz || 'Etc/UTC';
+            const { blueprint, dateMap, startDate } = buildCurrentMonthBlueprint(timeZone);
+            try {
+                const snapshot = await mockDb.ref(`users/${uid}/expenses`)
+                    .orderByChild('date')
+                    .startAt(startDate)
+                    .endAt(getLocalDateString(timeZone, 0))
+                    .once('value');
+                res.status(200).json(aggregateExpensesByMap(snapshot.val(), blueprint, dateMap));
+            } catch (error) {
+                res.status(500).json({ error: "Failed to get this month's stats" });
+            }
+        });
+
+        app.use('/api/analytics', router);
+        return app;
+    };
+
+    test("TC-33: returns 200 with this month's totals keyed by day index", async () => {
+        const tz = 'Asia/Kolkata';
+        const today = getLocalDateString(tz, 0);
+        const res = await request(setupTestApp({ a: { date: today, amount: 300 } }))
+            .get(`/api/analytics/monthly?tz=${encodeURIComponent(tz)}`)
+            .set('Authorization', 'Bearer mock-token');
+
+        assert.strictEqual(res.status, 200);
+        // Today is the last (highest) bucket; its total should be 300.
+        const lastIndex = Object.keys(res.body).length;
+        assert.strictEqual(res.body[lastIndex], 300);
+    });
+
+    test('TC-34: queries by date bounded to the 1st through today', async () => {
+        const tz = 'Asia/Kolkata';
+        const spy = {};
+        await request(setupTestApp({}, { spy }))
+            .get(`/api/analytics/monthly?tz=${encodeURIComponent(tz)}`)
+            .set('Authorization', 'Bearer mock-token');
+
+        const dayOfMonth = new Date(`${getLocalDateString(tz, 0)}T00:00:00Z`).getUTCDate();
+        assert.strictEqual(spy.path, 'users/user-123/expenses');
+        assert.strictEqual(spy.orderByChild, 'date');
+        assert.strictEqual(spy.startAt, getLocalDateString(tz, dayOfMonth - 1));
+        assert.strictEqual(spy.endAt, getLocalDateString(tz, 0));
+    });
+
+    test('TC-35: rejects requests without an Authorization header (401)', async () => {
+        const res = await request(setupTestApp({})).get('/api/analytics/monthly');
+        assert.strictEqual(res.status, 401);
+        assert.match(res.body.error, /Unauthorized/);
+    });
+
+    test('TC-36: returns 500 when the database read fails', async () => {
+        const res = await request(setupTestApp(null, { dbError: true }))
+            .get('/api/analytics/monthly')
+            .set('Authorization', 'Bearer mock-token');
+        assert.strictEqual(res.status, 500);
+        assert.match(res.body.error, /Failed to get this month's stats/);
+    });
 });

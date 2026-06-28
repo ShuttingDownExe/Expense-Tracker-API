@@ -5,6 +5,7 @@ const {requireAuth} = require('../middleware/auth')
 const {getLocalDateString, 
     sumExpenses,
     buildCurrentWeekBlueprint,
+    buildCurrentMonthBlueprint,
     aggregateExpensesByMap} = require('../utils/analytics')
 
 const db = admin.database()
@@ -54,7 +55,22 @@ analyticsRouter.get('/weekly', requireAuth, async (req, res) => {
 })
 
 analyticsRouter.get('/monthly', requireAuth, async(req, res) => {
-    
+    const uid = req.user.uid
+    const timeZone = req.query.tz || 'Etc/UTC'
+    const {blueprint, dateMap, startDate} = buildCurrentMonthBlueprint(timeZone)
+    try {
+        const userExpensesRef = db.ref(`users/${uid}/expenses`)
+        const snapshot = await userExpensesRef
+            .orderByChild('date')
+            .startAt(startDate)
+            .endAt(getLocalDateString(timeZone, 0))
+            .once('value')
+        const currentMonthData = aggregateExpensesByMap(snapshot.val(), blueprint, dateMap)
+        res.status(200).json(currentMonthData)
+    } catch (error) {
+        console.log(`Error: ${error}`)
+        res.status(500).json({error: `Failed to get this month's stats`})
+    }
 })
 
 module.exports = analyticsRouter

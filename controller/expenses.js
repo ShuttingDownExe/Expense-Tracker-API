@@ -12,12 +12,34 @@ const db = admin.database()
 
 expenseRouter.get('/', requireAuth, async (req, res) => {
     const uid = req.user.uid
+    const limit = Math.min(parseInt(req.query.limit) || 20, 50)
+    const cursor = req.query.cursor ? Number(req.query.cursor) : null
     console.log('Fetching expenses from Firebase Realtime Database...')
     try {
-        const userExpensesRef = db.ref(`users/${uid}/expenses`)
-        const snapshot = await userExpensesRef.once('value')
+        let query = db.ref(`users/${uid}/expenses`).orderByChild('createdAt')
+        if (cursor){
+            query = query.endAt(cursor-1)
+        }
+        query = query.limitToLast(limit)
+        const snapshot = await query.once('value')
         const expenses = snapshot.val() || {}
-        res.json(expenses)
+        const expensesArray = Object.entries(expenses)
+        .map(([key, value]) => ({ id: key, ...value }))
+        .sort((a, b) => b.createdAt - a.createdAt)
+        let nextCursor = null
+        if (expensesArray.length === limit) {
+            nextCursor = expensesArray[limit - 1].createdAt
+        }
+        res.status(200).json(
+            { 
+                data: expensesArray,
+                metaData: {
+                    nextCursor: nextCursor,
+                    hasMore: nextCursor !== null,
+                    count: expensesArray.length
+                }
+            }
+        )
     } catch (error) {
         console.error('Error fetching expenses:', error)
         res.status(500).json({ error: 'Failed to fetch expenses' })
