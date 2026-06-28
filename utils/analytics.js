@@ -37,25 +37,28 @@ const buildCurrentWeekBlueprint = (timezone) => {
 }
 
 const buildCurrentMonthBlueprint = (timezone) => {
+    // Derive "today" via the guarded helper (falls back to UTC for a bad tz),
+    // then read the day-of-month off the explicitly-UTC-parsed ISO string so
+    // there's no server-timezone drift. Mirrors buildCurrentWeekBlueprint.
     const todayStr = getLocalDateString(timezone, 0)
-    const currentDate = new Date(todayStr)
-    const currentDayOfTheMonth = currentDate.getDate().toString().padStart(2, '0')
-    const currentDayOfTheMonthInt = parseInt(currentDayOfTheMonth, 10)
+    const currentDayOfTheMonth = new Date(`${todayStr}T00:00:00Z`).getUTCDate()
 
     const blueprint = {}
     const dateMap = {}
 
-    for (let i = 1; i <= currentDayOfTheMonthInt; i++) {
-        const offset = currentDayOfTheMonthInt - i
+    // Map the 1st of the month through today onto 1-based day indices.
+    for (let i = 1; i <= currentDayOfTheMonth; i++) {
+        const offset = currentDayOfTheMonth - i
         const dateStr = getLocalDateString(timezone, offset)
+
         dateMap[dateStr] = i
         blueprint[i] = 0
     }
 
-    const startDate = getLocalDateString(timezone, currentDayOfTheMonthInt - 1)
-    return {blueprint, dateMap, startDate}
-}
+    const startDate = getLocalDateString(timezone, currentDayOfTheMonth - 1)
 
+    return { blueprint, dateMap, startDate }
+}
 const aggregateExpensesByMap = (expenses, blueprint, dateMap) => {
     const result = {...blueprint}
     Object.values(expenses || {}).forEach(expense => {
