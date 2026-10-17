@@ -69,9 +69,10 @@ expenseRouter.post('/', requireAuth, validateRequest(createExpenseSchema), async
         const uid = req.user.uid
         const userExpensesRef = db.ref(`users/${uid}/expenses`)
         const today = new Date().toLocaleDateString('en-CA', {timeZone: 'Asia/Kolkata'})
+        const expenseDate = req.body.date || today
         const newExpense = {
-            date: today,
-            ...req.body
+            ...req.body,
+            date: expenseDate,
         }
 
 
